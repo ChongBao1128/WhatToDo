@@ -1,29 +1,23 @@
 // app/signin/page.tsx
 
-import Link from "next/link";
-import { redirect } from "next/navigation";
-import { createClient } from "@/utils/supabase/server";
-import { signin } from "@/actions/auth/actions";
+import { signin } from '@/actions/auth/actions'
+import { createClient } from '@/utils/supabase/server'
+import Link from 'next/link'
+import { redirect } from 'next/navigation'
 
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import {
-  CardHeader,
-  CardContent,
-  CardFooter,
-  Card,
-} from "@/components/ui/card";
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 export default async function SignInPage() {
   // Create a Supabase client and check if the user is already authenticated.
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getUser();
+  const supabase = await createClient()
+  const { data } = await supabase.auth.getUser()
 
   // If a user session exists, redirect to the home page.
   if (data?.user) {
-    redirect("/");
+    redirect('/')
   }
 
   return (
@@ -60,7 +54,6 @@ export default async function SignInPage() {
               Sign in
             </Button>
           </form>
-          
         </CardContent>
 
         <CardFooter className="flex flex-col space-y-2">
@@ -70,5 +63,5 @@ export default async function SignInPage() {
         </CardFooter>
       </Card>
     </main>
-  );
+  )
 }

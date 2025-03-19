@@ -1,8 +1,8 @@
-"use server";
+'use server'
 
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
-import { createClient } from "@/utils/supabase/server";
+import { createClient } from '@/utils/supabase/server'
+import { revalidatePath } from 'next/cache'
+import { redirect } from 'next/navigation'
 
 /**
  * Signup function: Creates a new user account using Supabase authentication.
@@ -15,29 +15,29 @@ import { createClient } from "@/utils/supabase/server";
  * 5. Redirect the user to the signin page.
  */
 export async function signup(formData: FormData) {
-  const supabase = await createClient();
+  const supabase = await createClient()
 
   // Extract email and password from the form data.
-  const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
+  const email = formData.get('email') as string
+  const password = formData.get('password') as string
 
   // Validate that both email and password are provided.
   if (!email || !password) {
-    throw new Error("Email and password are required.");
+    throw new Error('Email and password are required.')
   }
 
   // Attempt to sign up the user.
-  const { error } = await supabase.auth.signUp({ email, password });
+  const { error } = await supabase.auth.signUp({ email, password })
 
   // If an error occurs, throw it to be handled by the calling function.
   if (error) {
-    throw new Error(error.message);
+    throw new Error(error.message)
   }
 
   // Invalidate the cached layout to ensure up-to-date information.
-  revalidatePath("/", "layout");
+  revalidatePath('/', 'layout')
   // Redirect the user to the signin page after a successful signup.
-  redirect("/signin");
+  redirect('/signin')
 }
 
 /**
@@ -50,29 +50,29 @@ export async function signup(formData: FormData) {
  * 4. Redirect the user to the home page.
  */
 export async function signin(formData: FormData) {
-  const supabase = await createClient();
+  const supabase = await createClient()
 
   // Extract email and password from the form data.
-  const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
+  const email = formData.get('email') as string
+  const password = formData.get('password') as string
 
   // Validate that both email and password are provided.
   if (!email || !password) {
-    throw new Error("Email and password are required.");
+    throw new Error('Email and password are required.')
   }
 
   // Attempt to sign in the user.
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { error } = await supabase.auth.signInWithPassword({ email, password })
 
   // If an error occurs during sign in, throw an error.
   if (error) {
-    throw new Error(error.message);
+    throw new Error(error.message)
   }
 
   // Revalidate the cached layout for the home page.
-  revalidatePath("/", "layout");
+  revalidatePath('/', 'layout')
   // Redirect the user to the home page after a successful sign in.
-  redirect("/");
+  redirect('/')
 }
 
 /**
@@ -83,16 +83,16 @@ export async function signin(formData: FormData) {
  * 2. Redirect the user to the signin page.
  */
 export async function signout() {
-  const supabase = await createClient();
+  const supabase = await createClient()
 
   // Attempt to sign out the user.
-  const { error } = await supabase.auth.signOut();
+  const { error } = await supabase.auth.signOut()
 
   // If an error occurs during sign out, throw an error.
   if (error) {
-    throw new Error(error.message);
+    throw new Error(error.message)
   }
 
   // Redirect the user to the signin page after a successful sign out.
-  redirect("/signin");
+  redirect('/signin')
 }

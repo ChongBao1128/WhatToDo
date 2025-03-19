@@ -1,15 +1,15 @@
-"use client";
+'use client'
 
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { AlertCircleIcon } from "lucide-react";
+import { Button } from '@/components/ui/button'
+import { AlertCircleIcon } from 'lucide-react'
+import Link from 'next/link'
 
 export default function Error({
   error,
   reset,
 }: {
-  error: Error & { digest?: string };
-  reset: () => void;
+  error: Error & { digest?: string }
+  reset: () => void
 }) {
   return (
     <main className="min-h-screen bg-gray-100 dark:bg-gray-800 flex items-center justify-center px-4 sm:px-6 lg:px-8">
@@ -39,5 +39,5 @@ export default function Error({
         </div>
       </div>
     </main>
-  );
+  )
 }
