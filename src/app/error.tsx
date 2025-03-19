@@ -27,7 +27,11 @@ export default function Error({
           </p>
         </div>
         <div className="space-y-2">
-          <Button className="w-full" variant="outline" onClick={() => reset()}>
+          <Button
+            className="w-full cursor-pointer"
+            variant="outline"
+            onClick={() => reset()}
+          >
             Try again
           </Button>
           <Link
