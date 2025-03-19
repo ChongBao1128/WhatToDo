@@ -1,107 +1,172 @@
 'use client';
 
-import { useState } from "react";
+import { useState, useEffect, SetStateAction } from "react";
 import { format, addMonths, subMonths } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle } from "@/components/ui/dialog";
+import { v4 as uuidv4 } from "uuid";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import CalendarGrid from "./CalendarGrid";
 import CalendarList from "./CalendarList";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { addTodo, editTodo, deleteTodo } from "@/actions/todos/actions";
+import type { Todo } from "@/lib/interface";
+import EventDialog from "./EventDialog";
 
+// For rendering we use a simplified EventType (used by CalendarGrid and CalendarList)
 export type EventType = {
   id: string;
   title: string;
   description: string;
-  date: string; // "yyyy-MM-dd"
+  date: string; // formatted as "yyyy-MM-dd"
   category: string;
-  action?: 'add' | 'edit'
+  action?: "add" | "edit";
 };
 
 export default function Calendar() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [events, setEvents] = useState<Record<string, EventType[]>>({
-    [format(new Date(), "yyyy-MM-dd")]: [
-      {
-        id: "1",
-        title: "Meeting",
-        description: "Project discussion",
-        date: format(new Date(), "yyyy-MM-dd"),
-        category: "Work",
-      },
-      {
-        id: "2",
-        title: "Meeting2",
-        description: "Project discussion",
-        date: format(new Date(), "yyyy-MM-dd"),
-        category: "Work",
-      }
-    ],
-    "2025-03-11": [
-      {
-        id: "1",
-        title: "Team Meeting",
-        description: "Discuss project milestones",
-        date: "2025-03-11",
-        category: "Work",
-      },
-      {
-        id: "2",
-        title: "Coffee Break",
-        description: "Catch up with colleagues",
-        date: "2025-03-11",
-        category: "Casual",
-      },
-    ],
-    "2025-03-13": [
-      {
-        id: "4",
-        title: "Doctor Appointment",
-        description: "Regular checkup",
-        date: "2025-03-13",
-        category: "Health",
-      },
-      {
-        id: "5",
-        title: "Lunch with Friend",
-        description: "Catch up with an old friend",
-        date: "2025-03-13",
-        category: "Social",
-      },
-      {
-        id: "8",
-        title: "Lunch with Friend",
-        description: "Catch up with an old friend",
-        date: "2025-03-13",
-        category: "Social",
-      },
-    ],
-    "2025-03-15": [
-      {
-        id: "6",
-        title: "Code Review",
-        description: "Review the latest PRs",
-        date: "2025-03-15",
-        category: "Work",
-      },
-    ],
-  });
+  // Events are now fetched from the database rather than being mocked.
+  const [events, setEvents] = useState<Record<string, EventType[]>>({});
+  const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<EventType | null>(null);
 
+  // Fetch events from the database when the component mounts.
+  useEffect(() => {
+    async function fetchEvents() {
+      try {
+        const res = await fetch("/api/todos");
+        if (res.ok) {
+          const todos: Todo[] = await res.json();
+          // Group todos by date (formatted as "yyyy-MM-dd") and map to EventType
+          const grouped: Record<string, EventType[]> = {};
+          todos.forEach((todo) => {
+            const dateStr = format(new Date(todo.date), "yyyy-MM-dd");
+            if (!grouped[dateStr]) grouped[dateStr] = [];
+            grouped[dateStr].push({
+              id: todo.id.toString(),
+              title: todo.task,
+              description: todo.description,
+              date: dateStr,
+              category: todo.category,
+            });
+          });
+          setEvents(grouped);
+        } else {
+          console.error("Failed to fetch todos");
+        }
+      } catch (error) {
+        console.error("Error fetching todos", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchEvents();
+  }, []);
+
+  // Handlers for month navigation
   const handlePrevMonth = () => setCurrentDate(subMonths(currentDate, 1));
   const handleNextMonth = () => setCurrentDate(addMonths(currentDate, 1));
 
+  // Open dialog to add a new event
   const handleAddEvent = (dateStr: string) => {
-    setSelectedEvent({ id: "", title: "", description: "", date: dateStr, category: "", action: "add" });
+    setSelectedEvent({
+      id: uuidv4(), // 🔥 Ensure UUID is generated properly
+      title: "",
+      description: "",
+      date: dateStr,
+      category: "",
+      action: "add",
+    });
     setIsDialogOpen(true);
   };
 
+  // Open dialog to edit an existing event
   const handleBadgeClick = (event: EventType) => {
     setSelectedEvent(event);
     setIsDialogOpen(true);
   };
+
+  // Convert a local EventType into a full Todo object.
+  // (In a real app, user_id would come from the session.)
+  const toTodo = (e: EventType): Todo => ({
+    id: e.id || uuidv4(), // ✅ Keep `id` as a valid UUID
+    user_id: "dummy-user-id",
+    task: e.title,
+    description: e.description,
+    date: new Date(e.date).toISOString(),
+    is_complete: false,
+    category: e.category,
+  });
+  
+
+  // Save handler for both adding and editing events.
+  async function handleSave() {
+    if (!selectedEvent) return;
+    if (selectedEvent.action === "add" || selectedEvent.id === "") {
+      // Build FormData for adding a new todo.
+      const formData = new FormData();
+      formData.append("task", selectedEvent.title);
+      formData.append("description", selectedEvent.description);
+      formData.append("date", selectedEvent.date);
+      formData.append("category", selectedEvent.category);
+      try {
+        await addTodo(formData);
+        // Update local state with the new event.
+        setEvents((prev) => {
+          const dayEvents = prev[selectedEvent.date] || [];
+          const newEvent: EventType = {
+            id: uuidv4(), // Generate a UUID instead of Date.now()
+            title: selectedEvent.title,
+            description: selectedEvent.description,
+            date: selectedEvent.date,
+            category: selectedEvent.category,
+          };
+          return { ...prev, [selectedEvent.date]: [...dayEvents, newEvent] };
+        });
+        setIsDialogOpen(false);
+        setSelectedEvent(null);
+      } catch (error) {
+        console.error(error);
+      }
+    } else {
+      // Editing an existing event.
+      const updatedTodo = toTodo(selectedEvent);
+      try {
+        await editTodo(updatedTodo);
+        // Update local state by replacing the event.
+        setEvents((prev) => {
+          const dayEvents = prev[selectedEvent.date] || [];
+          const updatedEvents = dayEvents.map((e) => (e.id === selectedEvent.id ? { ...selectedEvent, action: undefined } : e));
+          return { ...prev, [selectedEvent.date]: updatedEvents };
+        });
+        setIsDialogOpen(false);
+        setSelectedEvent(null);
+      } catch (error) {
+        console.error(error);
+      }
+    }
+  }
+
+  // Delete handler for removing an event.
+  async function handleDelete() {
+    if (!selectedEvent) return;
+    try {
+      await deleteTodo(selectedEvent.id);
+
+      setEvents((prev) => {
+        const dayEvents = prev[selectedEvent.date] || [];
+        return { ...prev, [selectedEvent.date]: dayEvents.filter((e) => e.id !== selectedEvent.id) };
+      });
+      setIsDialogOpen(false);
+      setSelectedEvent(null);
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
+  // Show a simple loading message while data is being fetched.
+  if (loading) return <div className="p-4">Loading events...</div>;
 
   return (
     <div className="p-4">
@@ -109,39 +174,26 @@ export default function Calendar() {
       <div className="flex justify-between items-center mb-4">
         <div className="flex items-center gap-2">
           <div className="text-xl font-bold">{format(currentDate, "MMMM yyyy")}</div>
-
           <Switch
             checked={viewMode === "grid"}
             className="cursor-pointer"
             onCheckedChange={(checked) => setViewMode(checked ? "grid" : "list")}
           />
-
         </div>
-
         <div className="flex items-center gap-2">
-          <Button 
-            variant='ghost' 
-            className="cursor-pointer"
-            onClick={handlePrevMonth}>
-              <ChevronLeft />
+          <Button className="cursor-pointer" variant="ghost" onClick={handlePrevMonth}>
+            <ChevronLeft />
           </Button>
 
-          <Button 
-            variant='ghost' 
-            className="cursor-pointer"
-            onClick={handleNextMonth}>
-              <ChevronRight />
+          <Button className="cursor-pointer" variant="ghost" onClick={handleNextMonth}>
+            <ChevronRight />
           </Button>
 
-          <Button 
-            className='cursor-pointer'
-            onClick={() => handleAddEvent(format(new Date(), "yyyy-MM-dd"))}>
-            Add Event
-          </Button>
+          <Button className="cursor-pointer" onClick={() => handleAddEvent(format(new Date(), "yyyy-MM-dd"))}>Add Event</Button>
         </div>
       </div>
 
-      {/* Conditionally render CalendarGrid or CalendarList */}
+      {/* Render either grid or list view */}
       {viewMode === "grid" ? (
         <CalendarGrid
           currentDate={currentDate}
@@ -158,81 +210,14 @@ export default function Calendar() {
         />
       )}
 
-      {/* Dialog for event details / add-edit form */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{selectedEvent?.id ? "Event Details" : "Add Event"}</DialogTitle>
-          </DialogHeader>
-          <div className="p-4 space-y-3">
-            <div>
-              <label className="block text-sm font-medium">Title</label>
-              <input
-                type="text"
-                value={selectedEvent?.title || ""}
-                onChange={(e) =>
-                  setSelectedEvent((prev) =>
-                    prev ? { ...prev, title: e.target.value } : null
-                  )
-                }
-                className="mt-1 block w-full border rounded p-1"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium">Description</label>
-              <textarea
-                value={selectedEvent?.description || ""}
-                
-                onChange={(e) =>
-                  setSelectedEvent((prev) =>
-                    prev ? { ...prev, description: e.target.value } : null
-                  )
-                }
-                className="mt-1 block w-full border rounded p-1 max-h-40"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium">Date</label>
-              <input
-                type="date"
-                value={selectedEvent?.date || ""}
-                onChange={(e) =>
-                  setSelectedEvent((prev) =>
-                    prev ? { ...prev, date: e.target.value } : null
-                  )
-                }
-                className="mt-1 block w-full border rounded p-1"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium">Category</label>
-              <input
-                type="text"
-                value={selectedEvent?.category || ""}
-                onChange={(e) =>
-                  setSelectedEvent((prev) =>
-                    prev ? { ...prev, category: e.target.value } : null
-                  )
-                }
-                className="mt-1 block w-full border rounded p-1"
-              />
-            </div>
-          </div>
-
-          <DialogFooter className="flex justify-end gap-2 pe-4">
-            {selectedEvent?.id && selectedEvent.action !== "add" ? (
-              <>
-                <Button className="cursor-pointer w-24" onClick={() => {/* implement edit event logic */}}>Edit</Button>
-                <Button variant="destructive" className="cursor-pointe w-24r" onClick={() => {/* implement remove event logic */}}>
-                  Remove
-                </Button>
-              </>
-            ): <Button className="cursor-pointer w-24" onClick={() => setIsDialogOpen(false)}>Add Event</Button>}
-            
-            <Button className="cursor-pointer bg-neutral-400 w-24" onClick={() => setIsDialogOpen(false)}>Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Dialog for adding/editing events */}
+      <EventDialog 
+        isOpen={isDialogOpen} 
+        event={selectedEvent} 
+        onClose={() => setIsDialogOpen(false)} 
+        onSave={handleSave} 
+        onDelete={handleDelete} 
+        setEvent={setSelectedEvent} />
     </div>
   );
 }

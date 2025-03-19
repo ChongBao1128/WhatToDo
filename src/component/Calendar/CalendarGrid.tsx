@@ -35,7 +35,6 @@ export default function CalendarGrid({ currentDate, events, onAddEvent, onBadgeC
                 </Badge>
               ))}
             </div>
-
             <div
               onClick={() => onAddEvent(dayStr)}
               className="absolute inset-0 z-0 opacity-0 hover:opacity-20 bg-gray-200 rounded cursor-pointer"
